@@ -1,0 +1,26 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Database (runtime-generated, not source)
+tnf_cl.db
+
+# Generated output data (large, re-generatable)
+data_gen/sample_output/transactions.json
+data_gen/sample_output/transactions.xml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db

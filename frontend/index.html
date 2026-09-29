@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TNF-CL — Bitcoin Transaction & Network Monitoring</title>
+    <style>
+        :root {
+            --bg-color: #f8f9fa;
+            --card-bg: #ffffff;
+            --border-color: #deae4a;
+            --border-light: #e9ecef;
+            --text-color: #212529;
+            --text-muted: #6c757d;
+            --primary: #0d6efd;
+            
+            --risk-low: #198754;      /* Green */
+            --risk-med: #ffc107;      /* Yellow */
+            --risk-high: #fd7e14;     /* Orange */
+            --risk-critical: #dc3545; /* Red */
+        }
+        
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg-color); color: var(--text-color); line-height: 1.5; padding: 20px; }
+        
+        header { display: flex; justify-content: space-between; align-items: center; background: var(--card-bg); padding: 15px 25px; border-radius: 8px; border: 1px solid var(--border-light); margin-bottom: 20px; }
+        h1 { font-size: 1.4rem; color: #111; font-weight: 700; }
+        .subtitle { font-size: 0.85rem; color: var(--text-muted); }
+
+        .demo-btn { background: var(--primary); color: white; border: none; padding: 10px 20px; font-weight: 600; font-size: 0.95rem; border-radius: 6px; cursor: pointer; }
+        .demo-btn:hover { opacity: 0.9; }
+
+        nav.tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid var(--border-light); padding-bottom: 5px; }
+        .tab-btn { background: none; border: none; padding: 10px 20px; font-size: 1rem; font-weight: 600; color: var(--text-muted); cursor: pointer; border-radius: 4px; }
+        .tab-btn.active { color: var(--primary); background: #e7f1ff; }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .caption-bar { background: #e9ecef; color: #495057; padding: 8px 14px; border-radius: 4px; font-size: 0.85rem; margin-bottom: 15px; font-weight: 500; }
+
+        /* Overview Grid */
+        .cards-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .card { background: var(--card-bg); padding: 20px; border-radius: 8px; border: 1px solid var(--border-light); }
+        .card-title { font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; }
+        .card-value { font-size: 2rem; font-weight: 700; color: #111; margin-top: 5px; }
+
+        .chart-box { background: var(--card-bg); padding: 20px; border-radius: 8px; border: 1px solid var(--border-light); }
+        .bar-container { display: flex; align-items: flex-end; height: 180px; gap: 25px; padding-top: 20px; margin-bottom: 10px; border-bottom: 1px solid var(--border-light); }
+        .bar-column { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; justify-content: flex-end; }
+        .bar-fill { width: 100%; border-radius: 4px 4px 0 0; min-height: 4px; transition: height 0.3s; }
+        .bar-label { font-size: 0.8rem; font-weight: 600; margin-top: 8px; text-align: center; }
+
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; background: var(--card-bg); border-radius: 8px; overflow: hidden; border: 1px solid var(--border-light); }
+        th, td { padding: 12px 16px; text-align: left; font-size: 0.9rem; border-bottom: 1px solid var(--border-light); }
+        th { background: #f1f3f5; font-weight: 600; color: #495057; }
+        tr:hover { background: #f8f9fa; }
+
+        .badge { display: inline-block; padding: 4px 10px; border-radius: 12px; font-weight: 700; font-size: 0.85rem; color: white; }
+        .badge-low { background: var(--risk-low); }
+        .badge-med { background: var(--risk-med); color: #212529; }
+        .badge-high { background: var(--risk-high); }
+        .badge-critical { background: var(--risk-critical); }
+
+        .action-btn { background: #e7f1ff; color: var(--primary); border: 1px solid #b6d4fe; padding: 5px 12px; border-radius: 4px; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
+        .action-btn:hover { background: var(--primary); color: white; }
+
+        /* Wallet Detail Layout */
+        .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+        .reason-item { padding: 8px 12px; margin-bottom: 8px; border-radius: 4px; background: #fff3cd; color: #664d03; border-left: 4px solid var(--risk-high); font-size: 0.9rem; font-weight: 600; }
+
+        /* Graph Canvas */
+        .graph-container { background: #1a1a1a; border-radius: 8px; position: relative; height: 500px; width: 100%; overflow: hidden; }
+        canvas { width: 100%; height: 100%; display: block; }
+        .graph-legend { position: absolute; top: 15px; left: 15px; background: rgba(0,0,0,0.75); color: white; padding: 10px 15px; border-radius: 6px; font-size: 0.8rem; }
+        .legend-item { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+        .legend-dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+
+        .empty-state { padding: 40px; text-align: center; color: var(--text-muted); font-size: 1rem; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div>
+            <h1>TNF-CL — Bitcoin Network & Blockchain Correlation Engine</h1>
+            <div class="subtitle">Smart India Hackathon Problem Statement 26146 (NTRO)</div>
+        </div>
+        <button class="demo-btn" onclick="runDemo()">▶ Run Demo & Ingest Data</button>
+    </header>
+
+    <nav class="tabs">
+        <button class="tab-btn active" onclick="switchTab('overview')">Overview</button>
+        <button class="tab-btn" onclick="switchTab('alerts')">Alerts</button>
+        <button class="tab-btn" onclick="switchTab('wallet')">Wallet Detail</button>
+        <button class="tab-btn" onclick="switchTab('graph')">Graph Explorer</button>
+    </nav>
+
+    <!-- 1. OVERVIEW TAB -->
+    <div id="tab-overview" class="tab-content active">
+        <div class="caption-bar">Overview summary of network-correlated blockchain transactions and aggregate risk metrics.</div>
+
+        <div class="cards-grid">
+            <div class="card">
+                <div class="card-title">Total Transactions</div>
+                <div class="card-value" id="stat-txns">0</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Total Wallets</div>
+                <div class="card-value" id="stat-wallets">0</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Flagged Wallets</div>
+                <div class="card-value" id="stat-flagged" style="color: var(--risk-critical);">0</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Highest Risk Score</div>
+                <div class="card-value" id="stat-max-score">0.0</div>
+            </div>
+        </div>
+
+        <div class="chart-box">
+            <h3>Wallet Risk Score Distribution</h3>
+            <div class="bar-container">
+                <div class="bar-column">
+                    <div class="bar-fill" id="bar-low" style="background: var(--risk-low); height: 5%;"></div>
+                    <div class="bar-label">Low<br>(0–24)</div>
+                </div>
+                <div class="bar-column">
+                    <div class="bar-fill" id="bar-med" style="background: var(--risk-med); height: 5%;"></div>
+                    <div class="bar-label">Medium<br>(25–49)</div>
+                </div>
+                <div class="bar-column">
+                    <div class="bar-fill" id="bar-high" style="background: var(--risk-high); height: 5%;"></div>
+                    <div class="bar-label">High<br>(50–74)</div>
+                </div>
+                <div class="bar-column">
+                    <div class="bar-fill" id="bar-critical" style="background: var(--risk-critical); height: 5%;"></div>
+                    <div class="bar-label">Critical<br>(75–100)</div>
+                </div>
+            </div>
+            <div class="subtitle" style="text-align: center;">Wallets grouped by risk score (0–100).</div>
+        </div>
+    </div>
+
+    <!-- 2. ALERTS TAB -->
+    <div id="tab-alerts" class="tab-content">
+        <div class="caption-bar">Ranked list of suspicious wallets generated by cross-layer AI detection rules and anomaly models.</div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Wallet Address</th>
+                    <th>Risk Score</th>
+                    <th>Confidence</th>
+                    <th>Primary Flag Reason</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody id="alerts-tbody">
+                <tr><td colspan="5" class="empty-state">No alerts yet — click "Run Demo & Ingest Data" to generate and analyze the dataset.</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 3. WALLET DETAIL TAB -->
+    <div id="tab-wallet" class="tab-content">
+        <div class="caption-bar">Detailed risk score breakdown, explainability evidence factors, associated IPs, and transaction history.</div>
+
+        <div style="margin-bottom: 15px; display: flex; gap: 10px;">
+            <input type="text" id="wallet-search-input" placeholder="Enter Wallet Address (e.g. peel_...)" style="padding: 8px 12px; width: 350px; border: 1px solid #ccc; border-radius: 4px;">
+            <button class="action-btn" style="padding: 8px 16px;" onclick="loadWalletDetail(document.getElementById('wallet-search-input').value)">Search Wallet</button>
+        </div>
+
+        <div id="wallet-detail-container">
+            <div class="empty-state">Select a wallet from the Alerts tab or search above to view details.</div>
+        </div>
+    </div>
+
+    <!-- 4. GRAPH EXPLORER TAB -->
+    <div id="tab-graph" class="tab-content">
+        <div class="caption-bar">Blue = IP Node, Green = Wallet Node, Orange = Transaction Node. Click any node to inspect local network connections.</div>
+
+        <div class="graph-container">
+            <div class="graph-legend">
+                <div class="legend-item"><span class="legend-dot" style="background: #3b82f6;"></span> IP Address</div>
+                <div class="legend-item"><span class="legend-dot" style="background: #22c55e;"></span> Wallet Address</div>
+                <div class="legend-item"><span class="legend-dot" style="background: #f97316;"></span> Transaction ID</div>
+            </div>
+            <canvas id="graph-canvas"></canvas>
+            <!-- Hover tooltip — populated by /node/{id} backend fetch -->
+            <div id="graph-tooltip" style="display:none;position:absolute;background:rgba(10,10,20,0.95);color:#e2e8f0;padding:12px 16px;border-radius:8px;font-size:0.8rem;max-width:340px;pointer-events:none;border:1px solid #4a5568;box-shadow:0 4px 20px rgba(0,0,0,0.6);z-index:99;"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = "";
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById('tab-' + tabName).classList.add('active');
+
+            if (tabName === 'overview') fetchStats();
+            if (tabName === 'alerts') fetchAlerts();
+            if (tabName === 'graph') loadGraphExplorer('full');
+        }
+
+        async function runDemo() {
+            alert("Starting dataset ingestion and cross-layer ML correlation pipeline...");
+            const res = await fetch(API_BASE + '/ingest', { method: 'POST' });
+            const data = await res.json();
+            alert("Analysis Complete! Correlated " + data.correlated_txns + " transactions.");
+            fetchStats();
+            fetchAlerts();
+        }
+
+        async function fetchStats() {
+            try {
+                const res = await fetch(API_BASE + '/stats');
+                const data = await res.json();
+                
+                document.getElementById('stat-txns').innerText = data.total_transactions;
+                document.getElementById('stat-wallets').innerText = data.total_wallets;
+                document.getElementById('stat-flagged').innerText = data.flagged_wallets;
+                document.getElementById('stat-max-score').innerText = data.highest_risk_score;
+
+                const total = Math.max(1, data.total_wallets);
+                const bands = data.risk_bands;
+                document.getElementById('bar-low').style.height = (bands['Low (0-24)'] / total * 100) + '%';
+                document.getElementById('bar-med').style.height = (bands['Medium (25-49)'] / total * 100) + '%';
+                document.getElementById('bar-high').style.height = (bands['High (50-74)'] / total * 100) + '%';
+                document.getElementById('bar-critical').style.height = (bands['Critical (75-100)'] / total * 100) + '%';
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function fetchAlerts() {
+            try {
+                const res = await fetch(API_BASE + '/alerts');
+                const alerts = await res.json();
+                const tbody = document.getElementById('alerts-tbody');
+                tbody.innerHTML = '';
+
+                if (alerts.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No alerts yet — click "Run Demo & Ingest Data" to analyze dataset.</td></tr>';
+                    return;
+                }
+
+                alerts.forEach(a => {
+                    let badgeClass = 'badge-low';
+                    if (a.risk_score >= 75) badgeClass = 'badge-critical';
+                    else if (a.risk_score >= 50) badgeClass = 'badge-high';
+                    else if (a.risk_score >= 25) badgeClass = 'badge-med';
+
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td style="font-family: monospace; font-weight: 600;">${a.wallet}</td>
+                        <td><span class="badge ${badgeClass}">${a.risk_score}</span></td>
+                        <td>${(a.confidence * 100).toFixed(0)}%</td>
+                        <td>${a.top_reason}</td>
+                        <td><button class="action-btn" onclick="inspectWallet('${a.wallet}')">View Details</button></td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        function inspectWallet(walletId) {
+            document.querySelectorAll('.tab-btn')[2].click();
+            loadWalletDetail(walletId);
+        }
+
+        async function loadWalletDetail(walletId) {
+            if (!walletId) return;
+            const container = document.getElementById('wallet-detail-container');
+            container.innerHTML = '<div>Loading wallet data...</div>';
+
+            try {
+                const res = await fetch(API_BASE + '/wallet/' + walletId);
+                if (!res.ok) {
+                    container.innerHTML = '<div class="empty-state">Wallet not found.</div>';
+                    return;
+                }
+                const data = await res.json();
+
+                let badgeClass = 'badge-low';
+                if (data.risk_score >= 75) badgeClass = 'badge-critical';
+                else if (data.risk_score >= 50) badgeClass = 'badge-high';
+                else if (data.risk_score >= 25) badgeClass = 'badge-med';
+
+                let html = `
+                    <div class="card" style="margin-bottom: 20px;">
+                        <h2>Wallet: <span style="font-family: monospace;">${data.wallet}</span></h2>
+                        <div style="margin-top: 10px; display: flex; gap: 20px;">
+                            <div>Risk Score: <span class="badge ${badgeClass}">${data.risk_score}</span></div>
+                            <div>Anomaly Score: <strong>${data.anomaly_score}</strong></div>
+                            <div>Peeling Pattern: <strong>${data.is_peeling ? 'YES' : 'NO'}</strong></div>
+                            <div>Cluster ID: <strong>${data.cluster_id || 'None'}</strong></div>
+                        </div>
+                    </div>
+
+                    <div class="detail-grid">
+                        <div class="card">
+                            <h3>Explainable Risk Breakdown</h3>
+                            <div style="margin-top: 10px;">
+                                ${data.risk_breakdown.length > 0 ? data.risk_breakdown.map(r => `<div class="reason-item">${r}</div>`).join('') : '<div class="subtitle">No specific risk triggers recorded.</div>'}
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <h3>Associated IP Addresses</h3>
+                            <ul style="margin-top: 10px; padding-left: 20px; font-family: monospace;">
+                                ${data.connected_ips.length > 0 ? data.connected_ips.map(ip => `<li>${ip}</li>`).join('') : '<li>No associated IPs recorded</li>'}
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <h3>Transaction History (${data.transactions.length})</h3>
+                        <table style="margin-top: 10px;">
+                            <thead>
+                                <tr>
+                                    <th>TXID</th>
+                                    <th>Timestamp</th>
+                                    <th>IP / ASN</th>
+                                    <th>Inputs</th>
+                                    <th>Outputs</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${data.transactions.map(t => `
+                                    <tr>
+                                        <td style="font-family: monospace;">${t.txid.substring(0, 16)}...</td>
+                                        <td>${t.timestamp}</td>
+                                        <td>${t.ip || 'N/A'} (${t.asn || '?'})<br><small>${t.country || ''} ${t.is_flagged_ip ? '⚠️ FLAGGED' : ''}</small></td>
+                                        <td style="font-size:0.78rem;font-family:monospace;">${t.inputs.map(i => `<div>${i.address.substring(0,14)}… <b>${i.amount_btc} BTC</b></div>`).join('')}</td>
+                                        <td style="font-size:0.78rem;font-family:monospace;">${t.outputs.map(o => `<div>${o.address.substring(0,14)}… <b>${o.amount_btc} BTC</b></div>`).join('')}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+                container.innerHTML = html;
+            } catch (e) {
+                container.innerHTML = '<div class="empty-state">Error loading wallet details.</div>';
+            }
+        }
+
+        // -------------------------------------------------------
+        // Lightweight HTML5 Canvas Force Graph Renderer
+        // with hover tooltip that fetches /node/{id} from backend
+        // -------------------------------------------------------
+        let graphNodes = [], graphLinks = [];
+        let hoveredNode = null;
+        let tooltipCache = {}; // avoid re-fetching same node
+        let tooltipTimeout = null;
+
+        function loadGraphExplorer(nodeId) {
+            fetch(API_BASE + '/graph/' + nodeId)
+                .then(r => r.json())
+                .then(data => {
+                    initGraphCanvas(data.nodes, data.links);
+                });
+        }
+
+        function formatNodeTooltip(d) {
+            if (!d || !d.details) return `<b>${d.id}</b>`;
+            const dt = d.details;
+            if (d.type === 'IP') {
+                const flagBadge = dt.is_flagged ? '<span style="color:#fc8181;font-weight:700;">⚠ FLAGGED ASN</span>' : '<span style="color:#68d391;">✓ Clean</span>';
+                return `<div style="margin-bottom:6px;"><b style="color:#90cdf4;">🌐 IP Address</b> ${flagBadge}</div>
+<b>${dt.ip_address}</b><br>
+<table style="width:100%;margin-top:6px;border-collapse:collapse;">
+  <tr><td style="color:#a0aec0;padding:2px 4px;">Country</td><td style="padding:2px 4px;">${dt.countries || 'N/A'}</td></tr>
+  <tr><td style="color:#a0aec0;padding:2px 4px;">ASN</td><td style="padding:2px 4px;">${dt.asns || 'N/A'}</td></tr>
+  <tr><td style="color:#a0aec0;padding:2px 4px;">Events</td><td style="padding:2px 4px;">${dt.event_count}</td></tr>
+  <tr><td style="color:#a0aec0;padding:2px 4px;">Linked TXs</td><td style="padding:2px 4px;">${dt.linked_txids ? dt.linked_txids.length : 0}</td></tr>
+</table>`;
+            }
+            if (d.type === 'TXID') {
+                const flagBadge = dt.is_flagged_ip ? '<span style="color:#fc8181;">⚠ Flagged IP</span>' : '';
+                const inList = (dt.inputs || []).slice(0,4).map(i =>
+                    `<div style="color:#68d391;">↳ ${i.address.substring(0,20)}… <b>${i.amount_btc} BTC</b></div>`).join('');
+                const outList = (dt.outputs || []).slice(0,4).map(o =>
+                    `<div style="color:#f6e05e;">↳ ${o.address.substring(0,20)}… <b>${o.amount_btc} BTC</b></div>`).join('');
+                return `<div style="margin-bottom:6px;"><b style="color:#fbd38d;">🔗 Transaction</b> ${flagBadge}</div>
+<span style="font-family:monospace;font-size:0.75rem;">${dt.txid.substring(0,24)}…</span><br>
+<table style="width:100%;margin-top:6px;border-collapse:collapse;">
+  <tr><td style="color:#a0aec0;padding:2px 4px;">Time</td><td style="padding:2px 4px;">${dt.timestamp || 'N/A'}</td></tr>
+  <tr><td style="color:#a0aec0;padding:2px 4px;">Script</td><td style="padding:2px 4px;">${dt.script_type}</td></tr>
+  <tr><td style="color:#a0aec0;padding:2px 4px;">Total In</td><td style="padding:2px 4px;">${dt.total_in_btc} BTC (${dt.n_inputs} inputs)</td></tr>
+  <tr><td style="color:#a0aec0;padding:2px 4px;">Total Out</td><td style="padding:2px 4px;">${dt.total_out_btc} BTC (${dt.n_outputs} outputs)</td></tr>
+  <tr><td style="color:#a0aec0;padding:2px 4px;">Fee</td><td style="padding:2px 4px;">${dt.fee_btc} BTC</td></tr>
+  <tr><td style="color:#a0aec0;padding:2px 4px;">Observed IP</td><td style="padding:2px 4px;">${dt.observed_ip || 'N/A'} (${dt.asn || '?'})</td></tr>
+</table>
+<div style="margin-top:6px;"><span style="color:#a0aec0;">Inputs:</span>${inList || '<i>none</i>'}</div>
+<div style="margin-top:4px;"><span style="color:#a0aec0;">Outputs:</span>${outList || '<i>none</i>'}</div>`;
+            }
+            if (d.type === 'Wallet') {
+                const risk = dt.risk_score || 0;
+                const riskColor = risk >= 75 ? '#fc8181' : risk >= 50 ? '#f6ad55' : risk >= 25 ? '#faf089' : '#68d391';
+                const reasons = (dt.risk_reasons || []).map(r => `<div style="color:#fc8181;">• ${r}</div>`).join('');
+                return `<div style="margin-bottom:6px;"><b style="color:#9ae6b4;">💰 Wallet</b></div>
+<span style="font-family:monospace;font-size:0.75rem;">${dt.address.substring(0,26)}…</span><br>
+<table style="width:100%;margin-top:6px;border-collapse:collapse;">
+  <tr><td style="color:#a0aec0;padding:2px 4px;">Risk Score</td><td style="padding:2px 4px;"><b style="color:${riskColor};">${risk}/100</b></td></tr>
+  <tr><td style="color:#a0aec0;padding:2px 4px;">Anomaly</td><td style="padding:2px 4px;">${dt.anomaly_score}</td></tr>
+  <tr><td style="color:#a0aec0;padding:2px 4px;">Total Sent</td><td style="padding:2px 4px;">${dt.total_sent} BTC</td></tr>
+  <tr><td style="color:#a0aec0;padding:2px 4px;">Total Recv</td><td style="padding:2px 4px;">${dt.total_received} BTC</td></tr>
+  <tr><td style="color:#a0aec0;padding:2px 4px;">Tx Count</td><td style="padding:2px 4px;">${dt.tx_count}</td></tr>
+  <tr><td style="color:#a0aec0;padding:2px 4px;">Peeling</td><td style="padding:2px 4px;">${dt.is_peeling ? '⚠ YES' : 'No'}</td></tr>
+  <tr><td style="color:#a0aec0;padding:2px 4px;">Cluster</td><td style="padding:2px 4px;">${dt.cluster_id}</td></tr>
+</table>
+${reasons ? '<div style="margin-top:6px;"><b style="color:#a0aec0;">Risk Factors:</b>' + reasons + '</div>' : ''}`;
+            }
+            return `<b>${d.id}</b>`;
+        }
+
+        async function fetchNodeDetail(nodeId) {
+            if (tooltipCache[nodeId]) return tooltipCache[nodeId];
+            try {
+                const res = await fetch(API_BASE + '/node/' + encodeURIComponent(nodeId));
+                if (!res.ok) return null;
+                const data = await res.json();
+                tooltipCache[nodeId] = data;
+                return data;
+            } catch(e) { return null; }
+        }
+
+        function initGraphCanvas(nodes, links) {
+            const canvas = document.getElementById('graph-canvas');
+            const tooltip = document.getElementById('graph-tooltip');
+            const ctx = canvas.getContext('2d');
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+
+            graphNodes = nodes.map((n, i) => ({
+                ...n,
+                x: canvas.width / 2 + (Math.random() - 0.5) * 300,
+                y: canvas.height / 2 + (Math.random() - 0.5) * 300,
+                vx: 0, vy: 0
+            }));
+
+            const nodeMap = {};
+            graphNodes.forEach(n => nodeMap[n.id] = n);
+
+            graphLinks = links.map(l => ({
+                source: nodeMap[l.source],
+                target: nodeMap[l.target]
+            })).filter(l => l.source && l.target);
+
+            // ---- Hover detection on canvas ----
+            canvas.addEventListener('mousemove', function(e) {
+                const rect = canvas.getBoundingClientRect();
+                const mx = e.clientX - rect.left;
+                const my = e.clientY - rect.top;
+                const HIT_RADIUS = 10;
+
+                let found = null;
+                for (const n of graphNodes) {
+                    const dx = n.x - mx, dy = n.y - my;
+                    if (Math.sqrt(dx*dx + dy*dy) < HIT_RADIUS) { found = n; break; }
+                }
+
+                if (found) {
+                    canvas.style.cursor = 'pointer';
+                    if (hoveredNode !== found) {
+                        hoveredNode = found;
+                        tooltip.innerHTML = `<span style="color:#a0aec0;">Loading ${found.id.substring(0,20)}…</span>`;
+                        // Position tooltip relative to graph-container
+                        let tx = found.x + 14;
+                        let ty = found.y - 10;
+                        if (tx + 340 > canvas.width) tx = found.x - 350;
+                        if (ty + 300 > canvas.height) ty = found.y - 300;
+                        tooltip.style.left = Math.max(4, tx) + 'px';
+                        tooltip.style.top  = Math.max(4, ty) + 'px';
+                        tooltip.style.display = 'block';
+
+                        clearTimeout(tooltipTimeout);
+                        tooltipTimeout = setTimeout(async () => {
+                            const detail = await fetchNodeDetail(found.id);
+                            if (detail && hoveredNode === found) {
+                                tooltip.innerHTML = formatNodeTooltip(detail);
+                            } else if (!detail && hoveredNode === found) {
+                                tooltip.innerHTML = `<b>${found.id.substring(0,30)}</b><br><span style="color:#a0aec0;">Type: ${found.type || 'Unknown'}</span>`;
+                            }
+                        }, 150);
+                    }
+                } else {
+                    canvas.style.cursor = 'default';
+                    hoveredNode = null;
+                    tooltip.style.display = 'none';
+                    clearTimeout(tooltipTimeout);
+                }
+            });
+            canvas.addEventListener('mouseleave', function() {
+                hoveredNode = null;
+                tooltip.style.display = 'none';
+                clearTimeout(tooltipTimeout);
+                canvas.style.cursor = 'default';
+            });
+
+            function simulate() {
+                // Simple repulsive & spring forces
+                for (let i = 0; i < graphNodes.length; i++) {
+                    for (let j = i + 1; j < graphNodes.length; j++) {
+                        let a = graphNodes[i], b = graphNodes[j];
+                        let dx = b.x - a.x, dy = b.y - a.y;
+                        let dist = Math.sqrt(dx * dx + dy * dy) || 1;
+                        let force = -200 / (dist * dist);
+                        a.vx += (dx / dist) * force;
+                        a.vy += (dy / dist) * force;
+                        b.vx -= (dx / dist) * force;
+                        b.vy -= (dy / dist) * force;
+                    }
+                }
+
+                graphLinks.forEach(l => {
+                    let dx = l.target.x - l.source.x, dy = l.target.y - l.source.y;
+                    let dist = Math.sqrt(dx * dx + dy * dy) || 1;
+                    let force = (dist - 40) * 0.02;
+                    l.source.vx += (dx / dist) * force;
+                    l.source.vy += (dy / dist) * force;
+                    l.target.vx -= (dx / dist) * force;
+                    l.target.vy -= (dy / dist) * force;
+                });
+
+                graphNodes.forEach(n => {
+                    n.x += n.vx; n.y += n.vy;
+                    n.vx *= 0.8; n.vy *= 0.8;
+                    n.x = Math.max(20, Math.min(canvas.width - 20, n.x));
+                    n.y = Math.max(20, Math.min(canvas.height - 20, n.y));
+                });
+
+                // Render
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                ctx.strokeStyle = '#444';
+                ctx.lineWidth = 1;
+                graphLinks.forEach(l => {
+                    ctx.beginPath();
+                    ctx.moveTo(l.source.x, l.source.y);
+                    ctx.lineTo(l.target.x, l.target.y);
+                    ctx.stroke();
+                });
+
+                graphNodes.forEach(n => {
+                    const isHovered = hoveredNode && hoveredNode.id === n.id;
+                    const radius = isHovered ? 9 : 6;
+                    ctx.beginPath();
+                    ctx.arc(n.x, n.y, radius, 0, 2 * Math.PI);
+                    if (n.type === 'IP') ctx.fillStyle = '#3b82f6';
+                    else if (n.type === 'Wallet') ctx.fillStyle = '#22c55e';
+                    else ctx.fillStyle = '#f97316';
+                    ctx.fill();
+                    if (isHovered) {
+                        ctx.strokeStyle = '#fff';
+                        ctx.lineWidth = 2;
+                        ctx.stroke();
+                        ctx.lineWidth = 1;
+                        ctx.strokeStyle = '#444';
+                    }
+                });
+
+                requestAnimationFrame(simulate);
+            }
+
+            simulate();
+        }
+
+        // Initialize on load
+        fetchStats();
+    </script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+asn,country,is_flagged
+AS1001,US,False
+AS1002,DE,False
+AS1003,JP,False
+AS1004,GB,False
+AS1005,FR,False
+AS6666,RU,True
+AS7777,KP,True
+AS8888,IR,True
